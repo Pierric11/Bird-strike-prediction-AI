@@ -1,34 +1,53 @@
 import sys
-import os
-import datetime
-import tkinter as tk
-from tkinter import filedialog
-# Vérification de pandas
-try:
-    import pandas as pd
-except ImportError:
 
-    print("ERREUR : La librairie 'pandas' n'est pas installée.")
-    input("Appuyez sur Entrée pour quitter...")
+import os
+
+import datetime
+
+import tkinter as tk
+
+from tkinter import filedialog
+ 
+# Check for required libraries
+
+try:
+
+    import pandas as pd
+
+    import openpyxl # Necessary for reading Excel files
+
+except ImportError as e:
+
+    print(f"CRITICAL ERROR: Missing library. {e}")
+
+    print("Please run: pip install pandas openpyxl")
+
+    input("Press Enter to exit...")
+
     sys.exit()
  
 def select_file_manually():
 
-    """Ouvre une fenêtre pour choisir le fichier CSV"""
-    print("Ouverture de la fenêtre de sélection de fichier...")
+    """Opens a window to select the Excel file."""
 
-    # Création d'une fenêtre racine invisible
+    print("Opening file selection window...")
+
+    # Create invisible root window
+
     root = tk.Tk()
+
     root.withdraw() 
 
-    # Ouvre l'explorateur de fichiers
+    # Open file explorer filtered for Excel
 
     file_path = filedialog.askopenfilename(
 
-        title="Sélectionnez votre fichier Excel/CSV 'Bird Strike'",
-        filetypes=[("Fichiers CSV", "*.csv"), ("Tous les fichiers", "*.*")]
+        title="Select your Bird Strike Excel File",
+
+        filetypes=[("Excel Files", "*.xlsx"), ("All Files", "*.*")]
 
     )
+
     return file_path
  
 def load_data(filepath):
@@ -39,126 +58,160 @@ def load_data(filepath):
  
     try:
 
-        print(f"Lecture du fichier : {os.path.basename(filepath)}...")
-        df = pd.read_csv(filepath)
+        print(f"Loading file: {os.path.basename(filepath)}...")
 
-        # Nettoyage et conversion
+        # CHANGED: Now using read_excel instead of read_csv
+
+        df = pd.read_excel(filepath)
+
+        # Standardize column names (optional, but good practice if headers possess spaces)
+
+        df.columns = [c.strip() for c in df.columns]
+
+        # Ensure DATE column is datetime objects
+
+        # Adjust 'INCIDENT_DATE' if your column name is different
+
         df['INCIDENT_DATE'] = pd.to_datetime(df['INCIDENT_DATE'])
 
-        # On essaie de convertir l'heure proprement
+        # Extract hour from TIME column (assuming HH:MM format)
+
         df['HOUR'] = pd.to_numeric(df['TIME'].astype(str).str[:2], errors='coerce')
-        print(" -> Données chargées avec succès !")
+
+        print(" -> Data loaded successfully!")
+
         return df
 
     except Exception as e:
 
-        print(f"\n[ERREUR] Impossible de lire le fichier : {e}")
+        print(f"\n[ERROR] Could not read the Excel file: {e}")
 
         return None
  
 def analyze_risk(df, input_date):
 
+    """
+
+    Analyzes historical data for the specific month of the input_date.
+
+    """
+
     target_month = input_date.month
+
     month_name = input_date.strftime("%B")
 
-    # Filtre sur le mois
+    # Filter data by month (Seasonal Analysis)
+
     monthly_data = df[df['INCIDENT_MONTH'] == target_month]
 
     if monthly_data.empty:
 
-        print(f"\nPas de données historiques pour le mois de {month_name}.")
+        print(f"\n[!] No historical data found for {month_name}. Cannot generate prediction.")
 
         return
  
     total_incidents = len(monthly_data)
 
-    # Fonction helper pour les stats
+    # Helper to get top statistic and its percentage
 
     def get_top_stat(column):
 
-        if column not in df.columns: return "Inconnu", 0
+        if column not in df.columns: return "Unknown", 0
+
         stats = monthly_data[column].value_counts(normalize=True)
-        if stats.empty: return "Inconnu", 0
+
+        if stats.empty: return "Unknown", 0
+
         return stats.index[0], stats.values[0] * 100
  
-    # Calculs statistiques
+    # Calculate statistics
 
     top_sky, sky_prob = get_top_stat('SKY')
+
     top_tod, tod_prob = get_top_stat('TIME_OF_DAY')
+
     top_ac, ac_prob = get_top_stat('AIRCRAFT')
+
     top_phase, phase_prob = get_top_stat('PHASE_OF_FLIGHT')
+
+    # Species logic
+
     species_stats = monthly_data['SPECIES'].value_counts(normalize=True)
-    top_species = species_stats.index[0] if not species_stats.empty else "Inconnu"
+
+    top_species = species_stats.index[0] if not species_stats.empty else "Unknown"
  
-    # Génération du rapport en anglais (comme demandé)
+    # Generate Report in English
+
     print("\n" + "="*60)
-    print(f"ANALYSIS REPORT FOR: {input_date.strftime('%Y-%m-%d')}")
-    print(f"Context: {month_name} (based on {total_incidents} historical records)")
+
+    print(f"PREDICTION REPORT FOR: {input_date.strftime('%Y-%m-%d')}")
+
+    print(f"Context: {month_name} (Analysis based on {total_incidents} past events)")
+
     print("="*60)
+
     print(f"\n1. METEOROLOGY (SKY)")
-    print(f"   Most likely condition: '{top_sky}'")
-    print(f"   (Probability: {sky_prob:.1f}%)")
-    print(f"\n2. TIME & SCHEDULE")
-    print(f"   Highest Risk Period: {top_tod} ({tod_prob:.1f}% chance).")
-    print(f"\n3. AIRCRAFT & PHASE")
-    print(f"   Phase of flight: {top_phase} ({phase_prob:.1f}%).")
-    print(f"   Aircraft most at risk: {top_ac}.")
-    print(f"\n4. WILDLIFE IDENTIFICATION")
-    print(f"   Primary Species Threat: {top_species}")
+
+    print(f"   - Predicted Condition: {top_sky}")
+
+    print(f"   - Confidence: {sky_prob:.1f}%")
+
+    print(f"\n2. TIME & VISIBILITY")
+
+    print(f"   - Time of Day Risk: {top_tod} ({tod_prob:.1f}% probability)")
+
+    print(f"\n3. FLIGHT PARAMETERS")
+
+    print(f"   - High Risk Phase: {top_phase} ({phase_prob:.1f}%)")
+
+    print(f"   - Most Vulnerable Aircraft: {top_ac}")
+
+    print(f"\n4. WILDLIFE THREAT")
+
+    print(f"   - Primary Species: {top_species}")
+
     print("="*60 + "\n")
  
 def main():
+
     print("\n********************************************************")
 
-    print("      BIRD STRIKE PREDICTION AI      ")
+    print("      BIRD STRIKE PREDICTION AI (EXCEL VERSION)      ")
 
     print("********************************************************")
 
-    script_dir = os.path.dirname(os.path.abspath(__file__))
+    print("Please select your .xlsx file in the popup window.")
 
-    # ÉTAPE 1 : DÉTECTER OU CHOISIR LE FICHIER
-    default_candidates = [
-        "Bird strike Miami CSV.csv",
-        "Bird strike Miami.xlsx - Feuil1.csv",
-    ]
+    # 1. Select File
 
-    csv_path = None
-    for filename in default_candidates:
-        candidate = os.path.join(script_dir, filename)
-        if os.path.isfile(candidate):
-            csv_path = candidate
-            break
+    excel_path = select_file_manually()
 
-    if csv_path:
-        print(f"Fichier détecté automatiquement : {os.path.basename(csv_path)}")
-    else:
-        print("Veuillez sélectionner le fichier de données (.csv) dans la fenêtre qui s'ouvre.")
-        csv_path = select_file_manually()
-        if not csv_path:
-            print("Aucun fichier sélectionné. Fermeture du programme.")
-            input("Appuyez sur Entrée...")
-            return
+    if not excel_path:
+
+        print("No file selected. Exiting system.")
+
+        input("Press Enter to close...")
+
+        return
  
-    # ÉTAPE 2 : CHARGER
+    # 2. Load Data
 
-    df = load_data(csv_path)
+    df = load_data(excel_path)
 
     if df is None:
-        # Si le fichier auto-détecté est illisible, on tente une sélection manuelle
-        print("Erreur de chargement. Veuillez sélectionner manuellement un autre fichier.")
-        csv_path = select_file_manually()
-        if not csv_path:
-            input("Erreur de chargement. Appuyez sur Entrée...")
-            return
 
-        df = load_data(csv_path)
-        if df is None:
-            input("Erreur de chargement. Appuyez sur Entrée...")
-            return
+        input("Fatal Error during loading. Press Enter to close...")
+
+        return
  
-    # ÉTAPE 3 : INTERACTION
+    # 3. Main Loop
 
-    print("\nINSTRUCTIONS: Enter a date (YYYY-MM-DD) to see the prediction.")
+    print("\nSYSTEM READY.")
+
+    print("INSTRUCTIONS: Enter a target date to generate a risk profile.")
+
+    print("The AI will analyze past data for that specific time of year.")
+
     print("Type 'exit' to quit.")
 
     while True:
@@ -166,6 +219,8 @@ def main():
         user_input = input("\n>> Enter date (YYYY-MM-DD): ").strip()
 
         if user_input.lower() == 'exit':
+
+            print("Shutting down. Goodbye.")
 
             break
 
@@ -177,12 +232,13 @@ def main():
 
         except ValueError:
 
-            print("Format invalide ! Utilisez YYYY-MM-DD (ex: 2025-08-14)")
+            print("Invalid format! Please use YYYY-MM-DD (e.g., 2025-12-25)")
 
         except Exception as e:
 
-            print(f"Erreur: {e}")
+            print(f"An error occurred: {e}")
  
 if __name__ == "__main__":
 
     main()
+ 
