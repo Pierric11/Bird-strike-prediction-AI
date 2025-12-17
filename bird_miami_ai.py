@@ -73,7 +73,7 @@ def analyze_risk(df, input_date):
  
 def main():
     # Nom exact du fichier
-    FILE_NAME = 'Bird strike Miami.xlsx - Feuil1.csv'
+    FILE_NAME = 'Bird strike Miami CSV'
     df = load_data(FILE_NAME)
     if df is None:
         # On met une pause ici pour que l'utilisateur voie l'erreur
