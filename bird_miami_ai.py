@@ -153,36 +153,53 @@ def analyze_risk(df, input_date):
     print("="*60 + "\n")
  
 def main():
-
     print("\n********************************************************")
 
     print("      BIRD STRIKE PREDICTION AI      ")
 
     print("********************************************************")
 
-    print("Veuillez sélectionner le fichier de données (.csv) dans la fenêtre qui s'ouvre.")
+    script_dir = os.path.dirname(os.path.abspath(__file__))
 
-    # ÉTAPE 1 : CHOISIR LE FICHIER
+    # ÉTAPE 1 : DÉTECTER OU CHOISIR LE FICHIER
+    default_candidates = [
+        "Bird strike Miami CSV.csv",
+        "Bird strike Miami.xlsx - Feuil1.csv",
+    ]
 
-    csv_path = select_file_manually()
+    csv_path = None
+    for filename in default_candidates:
+        candidate = os.path.join(script_dir, filename)
+        if os.path.isfile(candidate):
+            csv_path = candidate
+            break
 
-    if not csv_path:
-
-        print("Aucun fichier sélectionné. Fermeture du programme.")
-
-        input("Appuyez sur Entrée...")
-
-        return
+    if csv_path:
+        print(f"Fichier détecté automatiquement : {os.path.basename(csv_path)}")
+    else:
+        print("Veuillez sélectionner le fichier de données (.csv) dans la fenêtre qui s'ouvre.")
+        csv_path = select_file_manually()
+        if not csv_path:
+            print("Aucun fichier sélectionné. Fermeture du programme.")
+            input("Appuyez sur Entrée...")
+            return
  
     # ÉTAPE 2 : CHARGER
 
     df = load_data(csv_path)
 
     if df is None:
+        # Si le fichier auto-détecté est illisible, on tente une sélection manuelle
+        print("Erreur de chargement. Veuillez sélectionner manuellement un autre fichier.")
+        csv_path = select_file_manually()
+        if not csv_path:
+            input("Erreur de chargement. Appuyez sur Entrée...")
+            return
 
-        input("Erreur de chargement. Appuyez sur Entrée...")
-
-        return
+        df = load_data(csv_path)
+        if df is None:
+            input("Erreur de chargement. Appuyez sur Entrée...")
+            return
  
     # ÉTAPE 3 : INTERACTION
 
